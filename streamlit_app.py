@@ -273,7 +273,7 @@ else:
         <h1 class="app-title">API Tester - Lectura Multijugador</h1>
         <div class="user-info">
             <span class="user-email">{st.session_state.user_info.get('email', 'Usuario')}</span>
-            <button class="logout-btn" onclick="window.parent.postMessage({{type: 'streamlit:buttonClicked', key: 'logout_btn'}}, '*')">
+            <button class="logout-btn" onclick="window.parent.postMessage({{type: 'streamlit:componentCommunication', key: 'logout_trigger', value: true}}, '*')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
                     <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
@@ -284,9 +284,33 @@ else:
     """
     st.markdown(header_html, unsafe_allow_html=True)
     
-    # Handle logout button click
-    if st.button("Logout", key="logout_btn", style="display: none;"):
+    # Add a small container for the logout button that will be triggered by JavaScript
+    logout_container = st.empty()
+    
+    # Check if logout was triggered
+    if 'logout_trigger' in st.session_state and st.session_state.logout_trigger:
         logout()
+        st.session_state.logout_trigger = False
+    
+    # Add JavaScript to handle the logout button click
+    st.markdown("""
+    <script>
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'streamlit:componentCommunication' && event.data.key === 'logout_trigger') {
+            // Create a button click event
+            const button = document.createElement('button');
+            button.click();
+            // This doesn't actually work in Streamlit yet, so we'll use a fallback
+            window.location.reload();
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Add a hidden traditional logout button as fallback
+    with st.sidebar:
+        if st.button("Cerrar Sesión", key="logout_btn_fallback"):
+            logout()
     
     # Map entity names to API endpoints
     entity_endpoints = {

@@ -181,7 +181,17 @@ def login(email: str, password: str) -> bool:
             st.session_state.authenticated = True
             st.session_state.access_token = data.get("access_token")
             st.session_state.refresh_token = data.get("refresh_token")
-            st.session_state.user_info = data.get("user")
+            
+            # Properly handle user info
+            user_data = data.get("user")
+            if user_data:
+                st.session_state.user_info = user_data
+                logger.info(f"User info set: {user_data}")
+            else:
+                # If no user data is provided, use email as fallback
+                st.session_state.user_info = {"email": email}
+                logger.info(f"No user data provided, using email as fallback: {email}")
+                
             st.session_state.session_expiry = time.time() + 3600  # 1 hour expiry
             
             logger.info(f"Login successful for {email}")
@@ -321,8 +331,13 @@ else:
     # Add app title, user info, and logout to sidebar
     # Use a form submission to trigger logout via query parameter
     user_email = "Usuario"
-    if st.session_state.user_info and isinstance(st.session_state.user_info, dict):
-        user_email = st.session_state.user_info.get('email', 'Usuario')
+    if st.session_state.user_info:
+        logger.info(f"User info in session: {st.session_state.user_info}")
+        if isinstance(st.session_state.user_info, dict):
+            user_email = st.session_state.user_info.get('email', 'Usuario')
+        elif isinstance(st.session_state.user_info, str):
+            # In case user_info is just the email string
+            user_email = st.session_state.user_info
     
     sidebar_header = f"""
     <div class="sidebar-header">
@@ -627,78 +642,221 @@ else:
         st.subheader(f"Endpoint Especial: {special_endpoint}")
         
         if special_endpoint == "Variables por Historia":
-            historia_id = st.text_input("ID de Historia", key="variables_historia_id")
+            # Get list of histories for dropdown
+            historias_list = get_entity_list("Historias")
+            if historias_list:
+                historia_name, historia_id = st.selectbox(
+                    "Seleccionar Historia", 
+                    options=historias_list, 
+                    format_func=lambda x: x[0],
+                    key="variables_historia_select"
+                )
+                st.caption(f"ID: {historia_id}")
+            else:
+                historia_id = st.text_input("ID de Historia", key="variables_historia_id")
+                
             if st.button("Buscar", key="variables_historia_button") and historia_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"historias/{historia_id}/variables")
                     st.json(result)
         
         elif special_endpoint == "Jugadores por Partida":
-            partida_id = st.text_input("ID de Partida", key="jugadores_partida_id")
+            # Get list of partidas for dropdown
+            partidas_list = get_entity_list("Partidas")
+            if partidas_list:
+                partida_name, partida_id = st.selectbox(
+                    "Seleccionar Partida", 
+                    options=partidas_list, 
+                    format_func=lambda x: x[0],
+                    key="jugadores_partida_select"
+                )
+                st.caption(f"ID: {partida_id}")
+            else:
+                partida_id = st.text_input("ID de Partida", key="jugadores_partida_id")
+                
             if st.button("Buscar", key="jugadores_partida_button") and partida_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"partidas-jugadores/partida/{partida_id}")
                     st.json(result)
         
         elif special_endpoint == "Partidas por Jugador":
-            jugador_id = st.text_input("ID de Jugador", key="partidas_jugador_id")
+            # Get list of jugadores for dropdown
+            jugadores_list = get_entity_list("Jugadores")
+            if jugadores_list:
+                jugador_name, jugador_id = st.selectbox(
+                    "Seleccionar Jugador", 
+                    options=jugadores_list, 
+                    format_func=lambda x: x[0],
+                    key="partidas_jugador_select"
+                )
+                st.caption(f"ID: {jugador_id}")
+            else:
+                jugador_id = st.text_input("ID de Jugador", key="partidas_jugador_id")
+                
             if st.button("Buscar", key="partidas_jugador_button") and jugador_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"partidas-jugadores/jugador/{jugador_id}")
                     st.json(result)
         
         elif special_endpoint == "Historial por Partida":
-            partida_id = st.text_input("ID de Partida", key="historial_partida_id")
+            # Get list of partidas for dropdown
+            partidas_list = get_entity_list("Partidas")
+            if partidas_list:
+                partida_name, partida_id = st.selectbox(
+                    "Seleccionar Partida", 
+                    options=partidas_list, 
+                    format_func=lambda x: x[0],
+                    key="historial_partida_select"
+                )
+                st.caption(f"ID: {partida_id}")
+            else:
+                partida_id = st.text_input("ID de Partida", key="historial_partida_id")
+                
             if st.button("Buscar", key="historial_partida_button") and partida_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"historial-decisiones/partida/{partida_id}")
                     st.json(result)
         
         elif special_endpoint == "Historial por Jugador":
-            jugador_id = st.text_input("ID de Jugador", key="historial_jugador_id")
+            # Get list of jugadores for dropdown
+            jugadores_list = get_entity_list("Jugadores")
+            if jugadores_list:
+                jugador_name, jugador_id = st.selectbox(
+                    "Seleccionar Jugador", 
+                    options=jugadores_list, 
+                    format_func=lambda x: x[0],
+                    key="historial_jugador_select"
+                )
+                st.caption(f"ID: {jugador_id}")
+            else:
+                jugador_id = st.text_input("ID de Jugador", key="historial_jugador_id")
+                
             if st.button("Buscar", key="historial_jugador_button") and jugador_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"historial-decisiones/jugador/{jugador_id}")
                     st.json(result)
         
         elif special_endpoint == "Historial por Partida y Jugador":
-            partida_id = st.text_input("ID de Partida", key="historial_partida_jugador_partida_id")
-            jugador_id = st.text_input("ID de Jugador", key="historial_partida_jugador_jugador_id")
+            # Get list of partidas for dropdown
+            partidas_list = get_entity_list("Partidas")
+            if partidas_list:
+                partida_name, partida_id = st.selectbox(
+                    "Seleccionar Partida", 
+                    options=partidas_list, 
+                    format_func=lambda x: x[0],
+                    key="historial_partida_jugador_partida_select"
+                )
+                st.caption(f"ID: {partida_id}")
+            else:
+                partida_id = st.text_input("ID de Partida", key="historial_partida_jugador_partida_id")
+            
+            # Get list of jugadores for dropdown
+            jugadores_list = get_entity_list("Jugadores")
+            if jugadores_list:
+                jugador_name, jugador_id = st.selectbox(
+                    "Seleccionar Jugador", 
+                    options=jugadores_list, 
+                    format_func=lambda x: x[0],
+                    key="historial_partida_jugador_jugador_select"
+                )
+                st.caption(f"ID: {jugador_id}")
+            else:
+                jugador_id = st.text_input("ID de Jugador", key="historial_partida_jugador_jugador_id")
+                
             if st.button("Buscar", key="historial_partida_jugador_button") and partida_id and jugador_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"historial-decisiones/partida/{partida_id}/jugador/{jugador_id}")
                     st.json(result)
                     
         elif special_endpoint == "Autores por Historia":
-            historia_id = st.text_input("ID de Historia", key="autores_historia_id")
+            # Get list of histories for dropdown
+            historias_list = get_entity_list("Historias")
+            if historias_list:
+                historia_name, historia_id = st.selectbox(
+                    "Seleccionar Historia", 
+                    options=historias_list, 
+                    format_func=lambda x: x[0],
+                    key="autores_historia_select"
+                )
+                st.caption(f"ID: {historia_id}")
+            else:
+                historia_id = st.text_input("ID de Historia", key="autores_historia_id")
+                
             if st.button("Buscar", key="autores_historia_button") and historia_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"autores/historia/{historia_id}")
                     st.json(result)
         
         elif special_endpoint == "Historias por Autor":
-            autor_id = st.text_input("ID de Autor", key="historias_autor_id")
+            # Get list of autores for dropdown
+            autores_list = get_entity_list("Autores")
+            if autores_list:
+                autor_name, autor_id = st.selectbox(
+                    "Seleccionar Autor", 
+                    options=autores_list, 
+                    format_func=lambda x: x[0],
+                    key="historias_autor_select"
+                )
+                st.caption(f"ID: {autor_id}")
+            else:
+                autor_id = st.text_input("ID de Autor", key="historias_autor_id")
+                
             if st.button("Buscar", key="historias_autor_button") and autor_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"autores/{autor_id}/historias")
                     st.json(result)
         
         elif special_endpoint == "Nodos por Historia":
-            historia_id = st.text_input("ID de Historia", key="nodos_historia_id")
+            # Get list of histories for dropdown
+            historias_list = get_entity_list("Historias")
+            if historias_list:
+                historia_name, historia_id = st.selectbox(
+                    "Seleccionar Historia", 
+                    options=historias_list, 
+                    format_func=lambda x: x[0],
+                    key="nodos_historia_select"
+                )
+                st.caption(f"ID: {historia_id}")
+            else:
+                historia_id = st.text_input("ID de Historia", key="nodos_historia_id")
+                
             if st.button("Buscar", key="nodos_historia_button") and historia_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"historias/{historia_id}/nodos")
                     st.json(result)
         
         elif special_endpoint == "Opciones por Nodo":
-            nodo_id = st.text_input("ID de Nodo", key="opciones_nodo_id")
+            # Get list of nodos for dropdown
+            nodos_list = get_entity_list("Nodos")
+            if nodos_list:
+                nodo_name, nodo_id = st.selectbox(
+                    "Seleccionar Nodo", 
+                    options=nodos_list, 
+                    format_func=lambda x: x[0],
+                    key="opciones_nodo_select"
+                )
+                st.caption(f"ID: {nodo_id}")
+            else:
+                nodo_id = st.text_input("ID de Nodo", key="opciones_nodo_id")
+                
             if st.button("Buscar", key="opciones_nodo_button") and nodo_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"nodos/{nodo_id}/opciones")
                     st.json(result)
         
         elif special_endpoint == "Actualizar Historia por ID":
-            historia_id = st.text_input("ID de Historia a actualizar", key="update_historia_id_input")
+            # Get list of histories for dropdown
+            historias_list = get_entity_list("Historias")
+            if historias_list:
+                historia_name, historia_id = st.selectbox(
+                    "Seleccionar Historia", 
+                    options=historias_list, 
+                    format_func=lambda x: x[0],
+                    key="update_historia_select"
+                )
+                st.caption(f"ID: {historia_id}")
+            else:
+                historia_id = st.text_input("ID de Historia a actualizar", key="update_historia_id_input")
             
             if historia_id:
                 # Primero obtenemos los datos actuales de la historia

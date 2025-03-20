@@ -369,6 +369,55 @@ else:
         "Autores": "autor_id"
     }
 
+    # Function to get entity list with names and IDs
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_entity_list(entity_type: str) -> list:
+        """
+        Fetch a list of entities with their names and IDs.
+        Returns a list of tuples (name, id) for the dropdown.
+        """
+        try:
+            endpoint = entity_endpoints.get(entity_type)
+            if not endpoint:
+                logger.error(f"Unknown entity type: {entity_type}")
+                return []
+                
+            result = make_request("GET", endpoint, debug=False)
+            
+            if isinstance(result, list):
+                # Different entities have different name fields
+                if entity_type == "Historias":
+                    return [(item.get("titulo", "Sin título"), item.get("story_id")) for item in result]
+                elif entity_type == "Partidas":
+                    return [(f"Partida {item.get('game_id')[:8]}...", item.get("game_id")) for item in result]
+                elif entity_type == "Jugadores":
+                    return [(item.get("nombre", "Sin nombre"), item.get("player_id")) for item in result]
+                elif entity_type == "Personajes":
+                    return [(item.get("nombre", "Sin nombre"), item.get("character_id")) for item in result]
+                elif entity_type == "Nodos":
+                    return [(item.get("titulo", "Sin título"), item.get("node_id")) for item in result]
+                elif entity_type == "Opciones":
+                    return [(item.get("texto", "Sin texto")[:30], item.get("option_id")) for item in result]
+                elif entity_type == "Tablas Decisiones":
+                    return [(f"Tabla {idx+1}", item.get("id")) for idx, item in enumerate(result)]
+                elif entity_type == "Variables":
+                    return [(item.get("nombre", "Sin nombre"), item.get("variable_id")) for item in result]
+                elif entity_type == "Partidas-Jugadores":
+                    return [(f"PJ {idx+1}", item.get("id")) for idx, item in enumerate(result)]
+                elif entity_type == "Historial Decisiones":
+                    return [(f"Decisión {idx+1}", item.get("id")) for idx, item in enumerate(result)]
+                elif entity_type == "Autores":
+                    nombre_completo = lambda item: f"{item.get('nombre', '')} {item.get('apellidos', '')}".strip()
+                    return [(nombre_completo(item) or item.get('nombre_artistico', 'Sin nombre'), item.get("autor_id")) for item in result]
+                else:
+                    return [(f"Item {idx+1}", item.get("id")) for idx, item in enumerate(result)]
+            else:
+                logger.error(f"Unexpected response format for {entity_type}: {result}")
+                return []
+        except Exception as e:
+            logger.error(f"Error fetching {entity_type} list: {e}")
+            return []
+
     # Display the selected entity and operation
     st.header("API Tester - Lectura Multijugador")
     
@@ -405,12 +454,39 @@ else:
                     st.json(result)
                 
         elif operation == "Buscar por ID":
-            entity_id = st.text_input(f"ID de {entity}")
-            if st.button("Buscar") and entity_id:
+            st.info("Selecciona un elemento de la lista para buscar por ID")
+            
+            # Get the list of entities with names and IDs
+            with st.spinner("Cargando lista..."):
+                entity_list = get_entity_list(entity)
+            
+            if not entity_list:
+                st.warning(f"No se encontraron elementos para {entity}")
+                # Fallback to manual ID input
+                entity_id = st.text_input(f"ID de {entity} (manual)")
+                use_manual_id = True
+            else:
+                # Create a list of names for the dropdown
+                entity_names = ["Selecciona un elemento..."] + [name for name, _ in entity_list]
+                selected_index = st.selectbox(f"Selecciona {entity}", options=range(len(entity_names)), format_func=lambda i: entity_names[i])
+                
+                # Get the selected entity ID
+                if selected_index == 0:  # "Selecciona un elemento..." option
+                    entity_id = ""
+                    use_manual_id = False
+                else:
+                    entity_id = entity_list[selected_index - 1][1]  # -1 because we added "Selecciona un elemento..." at index 0
+                    use_manual_id = True
+                    
+                # Show the ID for reference
+                if entity_id:
+                    st.text(f"ID: {entity_id}")
+            
+            if st.button("Buscar") and entity_id and use_manual_id:
                 with st.spinner("Buscando..."):
                     result = make_request("GET", f"{entity_endpoints[entity]}/{entity_id}")
                     st.json(result)
-                
+                        
         elif operation == "Crear" or operation == "Actualizar":
             # Initialize form data
             form_data = {}

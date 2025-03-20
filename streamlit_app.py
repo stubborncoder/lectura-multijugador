@@ -3,8 +3,8 @@ import requests
 import json
 import logging
 import os
+import time
 from typing import Dict, Any, Optional
-import base64
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -22,10 +22,6 @@ def get_api_url():
 
 API_BASE_URL = get_api_url()
 
-# Display API URL in development (hidden in production)
-if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
-    st.sidebar.info(f"Conectado a API: {API_BASE_URL}")
-
 # Initialize session state for auth
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -37,137 +33,175 @@ if "refresh_token" not in st.session_state:
     st.session_state.refresh_token = None
 if "email_confirmed" not in st.session_state:
     st.session_state.email_confirmed = True
+if "session_expiry" not in st.session_state:
+    st.session_state.session_expiry = None
 
-# Custom CSS for the header bar
+# Custom CSS for better styling
 st.markdown("""
 <style>
-    .header-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
+    /* Custom sidebar header styles */
+    .sidebar-header {
+        padding: 0.5rem;
         margin-bottom: 1rem;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        position: sticky;
-        top: 0;
-        z-index: 999;
+        background-color: #f8f9fa;
+        border-radius: 4px;
     }
-    .app-title {
-        font-size: 1.5rem;
+    
+    .sidebar-title {
+        font-size: 1.2rem;
         font-weight: bold;
         margin: 0;
         color: #262730;
     }
-    .user-info {
+    
+    .sidebar-user {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        justify-content: space-between;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #e6e6e6;
     }
-    .user-email {
-        font-size: 0.9rem;
+    
+    .sidebar-email {
+        font-size: 0.85rem;
         color: #0068c9;
+        max-width: 70%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .logout-btn {
+    
+    .sidebar-logout {
         background: none;
         border: none;
         cursor: pointer;
         color: #ff4b4b;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        transition: background-color 0.3s;
+        font-size: 1.1rem;
+        padding: 0.25rem;
+        border-radius: 4px;
     }
-    .logout-btn:hover {
-        background-color: rgba(255, 75, 75, 0.1);
-    }
+    
+    /* Hide default elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
 # Function to make API requests with authentication
 def make_request(method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, debug: bool = True) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/{endpoint}"
-    headers = {}
     
-    # Add authentication token if available
-    if st.session_state.access_token:
+    headers = {}
+    if st.session_state.authenticated and st.session_state.access_token:
         headers["Authorization"] = f"Bearer {st.session_state.access_token}"
     
-    # Debug info
-    if debug:
-        logger.info(f"Making {method} request to: {url}")
-        if data:
-            logger.info(f"With data: {json.dumps(data, indent=2)}")
-    
     try:
-        if method == "GET":
+        if debug:
+            logger.info(f"Making {method} request to {url}")
+            if data:
+                logger.info(f"Request data: {data}")
+                
+        if method.upper() == "GET":
             response = requests.get(url, headers=headers)
-        elif method == "POST":
-            headers["Content-Type"] = "application/json"
-            response = requests.post(url, headers=headers, data=json.dumps(data))
-        elif method == "PUT":
-            headers["Content-Type"] = "application/json"
-            response = requests.put(url, headers=headers, data=json.dumps(data))
-        elif method == "DELETE":
+        elif method.upper() == "POST":
+            response = requests.post(url, json=data, headers=headers)
+        elif method.upper() == "PUT":
+            response = requests.put(url, json=data, headers=headers)
+        elif method.upper() == "DELETE":
             response = requests.delete(url, headers=headers)
         else:
-            raise ValueError(f"Método HTTP no soportado: {method}")
+            raise ValueError(f"Unsupported method: {method}")
         
-        # Debug response
+        # Check if token has expired
+        if response.status_code == 401 and st.session_state.authenticated:
+            logger.warning("Token expired or invalid, attempting to refresh")
+            # Try to refresh the token or log out if that fails
+            if not refresh_token():
+                logger.error("Token refresh failed, logging out")
+                logout()
+                st.error("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.")
+                st.rerun()
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
         if debug:
-            logger.info(f"Response status code: {response.status_code}")
-            logger.info(f"Response headers: {dict(response.headers)}")
-            logger.info(f"Response content: {response.text[:500]}...")
+            logger.error(f"Request error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_data = e.response.json()
+                if debug:
+                    logger.error(f"Error response: {error_data}")
+                return error_data
+            except:
+                if debug:
+                    logger.error(f"Error status code: {e.response.status_code}, text: {e.response.text}")
+                return {"detail": f"Error: {e.response.status_code} - {e.response.text}"}
+        return {"detail": f"Error de conexión: {str(e)}"}
+
+# Function to refresh the authentication token
+def refresh_token() -> bool:
+    if not st.session_state.refresh_token:
+        return False
+    
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/auth/refresh",
+            json={"refresh_token": st.session_state.refresh_token}
+        )
         
-        # Handle authentication errors
-        if response.status_code == 401:
-            logger.warning("Authentication error (401)")
-            st.error("Sesión expirada. Por favor, inicia sesión nuevamente.")
-            st.session_state.authenticated = False
-            st.session_state.user_info = None
-            st.session_state.access_token = None
-            st.session_state.refresh_token = None
-            st.rerun()
-        
-        # Try to parse JSON response
-        try:
-            return response.json()
-        except Exception as e:
-            logger.error(f"Error al procesar la respuesta JSON: {str(e)}")
-            return {"error": "No se pudo procesar la respuesta"}
+        if response.status_code == 200:
+            data = response.json()
+            st.session_state.access_token = data.get("access_token")
+            st.session_state.refresh_token = data.get("refresh_token")
+            # Set session expiry to 1 hour from now
+            st.session_state.session_expiry = time.time() + 3600
+            logger.info("Token refreshed successfully")
+            return True
+        else:
+            logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
+            return False
     except Exception as e:
-        logger.error(f"Error en la solicitud: {str(e)}")
-        return {"error": str(e)}
+        logger.error(f"Exception during token refresh: {e}")
+        return False
 
 # Login function
 def login(email: str, password: str) -> bool:
     try:
-        logger.info(f"Attempting to login with email: {email}")
-        response = make_request("POST", "auth/login", {"email": email, "password": password})
+        logger.info(f"Attempting login for {email}")
+        response = requests.post(
+            f"{API_BASE_URL}/auth/login",
+            json={"email": email, "password": password}
+        )
         
-        # Check for email confirmation error
-        if "email_confirmed" in response and response["email_confirmed"] is False:
-            logger.warning(f"Login failed: Email not confirmed for {email}")
-            st.warning(response.get("message", "Por favor, confirma tu correo electrónico antes de iniciar sesión."))
-            st.session_state.email_confirmed = False
-            return False
-        
-        if "id" in response and "access_token" in response:
-            logger.info(f"Login successful for: {email}")
+        if response.status_code == 200:
+            data = response.json()
+            # Store authentication data in session state
             st.session_state.authenticated = True
-            st.session_state.user_info = response
-            st.session_state.access_token = response["access_token"]
-            st.session_state.refresh_token = response["refresh_token"]
-            st.session_state.email_confirmed = True
+            st.session_state.access_token = data.get("access_token")
+            st.session_state.refresh_token = data.get("refresh_token")
+            st.session_state.user_info = data.get("user")
+            st.session_state.session_expiry = time.time() + 3600  # 1 hour expiry
+            
+            logger.info(f"Login successful for {email}")
             return True
+        elif response.status_code == 401:
+            data = response.json()
+            if "email_confirmed" in data and not data["email_confirmed"]:
+                st.session_state.email_confirmed = False
+                logger.warning(f"Email not confirmed for {email}")
+                return False
+            st.error("Credenciales inválidas")
+            logger.warning(f"Invalid credentials for {email}")
+            return False
         else:
-            error_msg = response.get('detail', 'Credenciales inválidas')
-            logger.error(f"Login error: {error_msg}")
-            st.error(f"Error al iniciar sesión: {error_msg}")
+            st.error(f"Error: {response.status_code} - {response.text}")
+            logger.error(f"Login error: {response.status_code} - {response.text}")
             return False
     except Exception as e:
-        logger.error(f"Exception during login: {str(e)}")
-        st.error(f"Error al iniciar sesión: {str(e)}")
+        st.error(f"Error de conexión: {e}")
+        logger.error(f"Connection error during login: {e}")
         return False
 
 # Register function
@@ -221,11 +255,28 @@ def register(email: str, password: str, nombre: Optional[str] = None, apellidos:
 # Logout function
 def logout():
     logger.info("Logging out user")
+    # Clear all authentication data from session state
     st.session_state.authenticated = False
     st.session_state.user_info = None
     st.session_state.access_token = None
     st.session_state.refresh_token = None
+    st.session_state.session_expiry = None
     st.rerun()
+
+# Check if logout was requested via query parameters
+query_params = st.experimental_get_query_params()
+if "logout" in query_params and query_params["logout"][0] == "true" and st.session_state.authenticated:
+    logout()
+
+# Check if session has expired
+if st.session_state.authenticated and st.session_state.session_expiry:
+    if time.time() > st.session_state.session_expiry:
+        # Try to refresh the token
+        if not refresh_token():
+            logger.info("Session expired, logging out")
+            logout()
+            st.error("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.")
+            st.rerun()
 
 # Authentication UI
 if not st.session_state.authenticated:
@@ -267,50 +318,26 @@ if not st.session_state.authenticated:
 else:
     # User is authenticated, show the main app
     
-    # Header bar with app title, user info, and logout button
-    header_html = f"""
-    <div class="header-bar">
-        <h1 class="app-title">API Tester - Lectura Multijugador</h1>
-        <div class="user-info">
-            <span class="user-email">{st.session_state.user_info.get('email', 'Usuario')}</span>
-            <button class="logout-btn" onclick="window.parent.postMessage({{type: 'streamlit:componentCommunication', key: 'logout_trigger', value: true}}, '*')">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
-                    <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
-                </svg>
-            </button>
+    # Add app title, user info, and logout to sidebar
+    # Use a form submission to trigger logout via query parameter
+    user_email = "Usuario"
+    if st.session_state.user_info and isinstance(st.session_state.user_info, dict):
+        user_email = st.session_state.user_info.get('email', 'Usuario')
+    
+    sidebar_header = f"""
+    <div class="sidebar-header">
+        <div class="sidebar-title">API Tester - Lectura Multijugador</div>
+        <div class="sidebar-user">
+            <div class="sidebar-email">{user_email}</div>
+            <a href="?logout=true" class="sidebar-logout">🚪</a>
         </div>
     </div>
     """
-    st.markdown(header_html, unsafe_allow_html=True)
+    st.sidebar.markdown(sidebar_header, unsafe_allow_html=True)
     
-    # Add a small container for the logout button that will be triggered by JavaScript
-    logout_container = st.empty()
-    
-    # Check if logout was triggered
-    if 'logout_trigger' in st.session_state and st.session_state.logout_trigger:
-        logout()
-        st.session_state.logout_trigger = False
-    
-    # Add JavaScript to handle the logout button click
-    st.markdown("""
-    <script>
-    window.addEventListener('message', function(event) {
-        if (event.data.type === 'streamlit:componentCommunication' && event.data.key === 'logout_trigger') {
-            // Create a button click event
-            const button = document.createElement('button');
-            button.click();
-            // This doesn't actually work in Streamlit yet, so we'll use a fallback
-            window.location.reload();
-        }
-    });
-    </script>
-    """, unsafe_allow_html=True)
-    
-    # Add a hidden traditional logout button as fallback
-    with st.sidebar:
-        if st.button("Cerrar Sesión", key="logout_btn_fallback"):
-            logout()
+    # Display API URL in development (hidden in production)
+    if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
+        st.sidebar.info(f"Conectado a API: {API_BASE_URL}")
     
     # Map entity names to API endpoints
     entity_endpoints = {

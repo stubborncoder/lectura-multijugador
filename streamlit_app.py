@@ -4,25 +4,21 @@ import json
 import logging
 import os
 from typing import Dict, Any, Optional
+import base64
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# API base URL - configurable for different environments
-DEFAULT_API_URL = "http://localhost:8000/api/v1"
-
-# Get API URL from environment or secrets
+# Function to get API URL from environment or secrets
 def get_api_url():
-    # First check for environment variable
-    api_url = os.environ.get("API_BASE_URL")
-    
-    # Then check Streamlit secrets (for Streamlit Cloud deployment)
-    if not api_url and hasattr(st, "secrets") and "api" in st.secrets:
-        api_url = st.secrets.api.base_url
-        
-    # Fall back to default
-    return api_url or DEFAULT_API_URL
+    # First try to get from secrets
+    try:
+        return st.secrets["api"]["base_url"]
+    except Exception as e:
+        logger.info(f"Could not get API URL from secrets: {e}")
+        # Fallback to environment variable or default
+        return os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
 
 API_BASE_URL = get_api_url()
 
@@ -41,6 +37,52 @@ if "refresh_token" not in st.session_state:
     st.session_state.refresh_token = None
 if "email_confirmed" not in st.session_state:
     st.session_state.email_confirmed = True
+
+# Custom CSS for the header bar
+st.markdown("""
+<style>
+    .header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 999;
+    }
+    .app-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin: 0;
+        color: #262730;
+    }
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .user-email {
+        font-size: 0.9rem;
+        color: #0068c9;
+    }
+    .logout-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #ff4b4b;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: background-color 0.3s;
+    }
+    .logout-btn:hover {
+        background-color: rgba(255, 75, 75, 0.1);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Function to make API requests with authentication
 def make_request(method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, debug: bool = True) -> Dict[str, Any]:
@@ -178,24 +220,18 @@ def register(email: str, password: str, nombre: Optional[str] = None, apellidos:
 
 # Logout function
 def logout():
-    try:
-        if st.session_state.access_token:
-            make_request("POST", "auth/logout", debug=False)
-    except Exception as e:
-        logger.error(f"Error during logout: {str(e)}")
-    
+    logger.info("Logging out user")
     st.session_state.authenticated = False
     st.session_state.user_info = None
     st.session_state.access_token = None
     st.session_state.refresh_token = None
-    st.session_state.email_confirmed = True
     st.rerun()
-
-# App title
-st.title("API Tester - Lectura Multijugador")
 
 # Authentication UI
 if not st.session_state.authenticated:
+    # App title for non-authenticated users
+    st.title("API Tester - Lectura Multijugador")
+    
     st.header("Iniciar Sesión / Registrarse")
     
     # Tabs for login and register
@@ -230,11 +266,27 @@ if not st.session_state.authenticated:
                 st.error("No se pudo completar el registro. Revisa los errores arriba.")
 else:
     # User is authenticated, show the main app
-    # Display user info and logout button in sidebar
-    with st.sidebar:
-        st.write(f"Usuario: {st.session_state.user_info.get('email', 'Usuario')}")
-        if st.button("Cerrar Sesión"):
-            logout()
+    
+    # Header bar with app title, user info, and logout button
+    header_html = f"""
+    <div class="header-bar">
+        <h1 class="app-title">API Tester - Lectura Multijugador</h1>
+        <div class="user-info">
+            <span class="user-email">{st.session_state.user_info.get('email', 'Usuario')}</span>
+            <button class="logout-btn" onclick="window.parent.postMessage({{type: 'streamlit:buttonClicked', key: 'logout_btn'}}, '*')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
+                    <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
+    
+    # Handle logout button click
+    if st.button("Logout", key="logout_btn", style="display: none;"):
+        logout()
     
     # Map entity names to API endpoints
     entity_endpoints = {

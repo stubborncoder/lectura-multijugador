@@ -264,7 +264,7 @@ def logout():
     st.rerun()
 
 # Check if logout was requested via query parameters
-query_params = st.experimental_get_query_params()
+query_params = st.query_params
 if "logout" in query_params and query_params["logout"][0] == "true" and st.session_state.authenticated:
     logout()
 

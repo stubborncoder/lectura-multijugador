@@ -292,157 +292,159 @@ else:
          "Historial Decisiones", "Autores"]
     )
 
-    # Handle different operations
-    if operation == "Listar Todos":
-        if st.button("Buscar"):
-            with st.spinner("Buscando..."):
-                result = make_request("GET", entity_endpoints[entity])
-                st.json(result)
+    # Only show regular operations if no special endpoint is selected
+    if special_endpoint == "Ninguno":
+        # Handle different operations
+        if operation == "Listar Todos":
+            if st.button("Buscar"):
+                with st.spinner("Buscando..."):
+                    result = make_request("GET", entity_endpoints[entity])
+                    st.json(result)
                 
-    elif operation == "Buscar por ID":
-        entity_id = st.text_input(f"ID de {entity}")
-        if st.button("Buscar") and entity_id:
-            with st.spinner("Buscando..."):
-                result = make_request("GET", f"{entity_endpoints[entity]}/{entity_id}")
-                st.json(result)
+        elif operation == "Buscar por ID":
+            entity_id = st.text_input(f"ID de {entity}")
+            if st.button("Buscar") and entity_id:
+                with st.spinner("Buscando..."):
+                    result = make_request("GET", f"{entity_endpoints[entity]}/{entity_id}")
+                    st.json(result)
                 
-    elif operation == "Crear" or operation == "Actualizar":
-        # Initialize form data
-        form_data = {}
-        
-        # Entity-specific form fields
-        if entity == "Historias":
-            form_data["titulo"] = st.text_input("Título")
-            form_data["descripcion"] = st.text_area("Descripción")
-            form_data["generos"] = st.text_input("Géneros (separados por comas)").split(",") if st.text_input("Géneros (separados por comas)") else []
-            form_data["dificultad"] = st.slider("Dificultad", 1, 10, 5)
-            form_data["estado"] = st.selectbox("Estado", ["borrador", "publicado", "archivado"])
-            form_data["autor_id"] = st.text_input("ID del Autor")
-            form_data["publicada"] = st.checkbox("Publicada")
-        
-        elif entity == "Partidas":
-            form_data["historia_id"] = st.text_input("ID de Historia")
-            form_data["nombre"] = st.text_input("Nombre")
-            form_data["estado"] = st.selectbox("Estado", ["activa", "completada", "abandonada"])
-            form_data["fecha_inicio"] = st.date_input("Fecha de Inicio").isoformat()
-        
-        elif entity == "Jugadores":
-            form_data["nickname"] = st.text_input("Nickname")
-            form_data["email"] = st.text_input("Email")
-            form_data["nombre"] = st.text_input("Nombre")
-        
-        elif entity == "Personajes":
-            form_data["nombre"] = st.text_input("Nombre")
-            form_data["descripcion"] = st.text_area("Descripción")
-            form_data["historia_id"] = st.text_input("ID de la Historia")
-            form_data["atributos"] = st.text_area("Atributos (JSON)", "{}")
-            form_data["imagen"] = st.text_input("URL de Imagen")
-        
-        elif entity == "Nodos":
-            form_data["historia_id"] = st.text_input("ID de la Historia")
-            form_data["titulo"] = st.text_input("Título")
-            form_data["contenido"] = st.text_area("Contenido")
-            form_data["es_final"] = st.checkbox("Es Final")
-            form_data["orden"] = st.number_input("Orden", min_value=1)
-            form_data["imagen"] = st.text_input("URL de Imagen")
-            form_data["audio"] = st.text_input("URL de Audio")
-            form_data["video"] = st.text_input("URL de Video")
-        
-        elif entity == "Opciones":
-            form_data["nodo_origen_id"] = st.text_input("ID del Nodo Origen")
-            form_data["nodo_destino_id"] = st.text_input("ID del Nodo Destino")
-            form_data["texto"] = st.text_input("Texto")
-            form_data["condicion"] = st.text_area("Condición (opcional)")
-            form_data["orden"] = st.number_input("Orden", min_value=1)
-            form_data["efectos"] = st.text_area("Efectos (JSON)", "{}")
-        
-        elif entity == "Tablas Decisiones":
-            form_data["historia_id"] = st.text_input("ID de la Historia")
-            form_data["nombre"] = st.text_input("Nombre")
-            form_data["descripcion"] = st.text_area("Descripción")
-            form_data["reglas"] = st.text_area("Reglas (JSON)", "[]")
-        
-        elif entity == "Variables":
-            form_data["historia_id"] = st.text_input("ID de la Historia")
-            form_data["nombre"] = st.text_input("Nombre")
-            form_data["tipo"] = st.selectbox("Tipo", ["texto", "numero", "booleano"])
-            form_data["valor_defecto"] = st.text_input("Valor por Defecto")
-            form_data["descripcion"] = st.text_area("Descripción")
-        
-        elif entity == "Partidas-Jugadores":
-            form_data["partida_id"] = st.text_input("ID de la Partida")
-            form_data["jugador_id"] = st.text_input("ID del Jugador")
-            form_data["personaje_id"] = st.text_input("ID del Personaje")
-            form_data["estado"] = st.selectbox("Estado", ["activo", "inactivo", "eliminado"])
-            form_data["variables"] = st.text_area("Variables (JSON)", "{}")
-        
-        elif entity == "Historial Decisiones":
-            form_data["partida_id"] = st.text_input("ID de la Partida")
-            form_data["jugador_id"] = st.text_input("ID del Jugador")
-            form_data["nodo_id"] = st.text_input("ID del Nodo")
-            form_data["opcion_id"] = st.text_input("ID de la Opción")
-            form_data["timestamp"] = st.text_input("Timestamp (YYYY-MM-DD HH:MM:SS)")
-            form_data["variables_antes"] = st.text_area("Variables Antes (JSON)", "{}")
-            form_data["variables_despues"] = st.text_area("Variables Después (JSON)", "{}")
-        
-        elif entity == "Autores":
-            form_data["nombre"] = st.text_input("Nombre")
-            form_data["apellidos"] = st.text_input("Apellidos")
-            form_data["nombre_artistico"] = st.text_input("Nombre Artístico", "")
-            form_data["biografia"] = st.text_area("Biografía", "")
-            form_data["nacionalidad"] = st.text_input("Nacionalidad", "")
-            form_data["email"] = st.text_input("Email", "")
-            form_data["website"] = st.text_input("Sitio Web", "")
-            form_data["imagen_perfil"] = st.text_input("URL de Imagen de Perfil", "")
-            form_data["estado"] = st.selectbox("Estado", ["activo", "inactivo", "eliminado"])
-            
-            # Redes sociales como campos separados
-            st.subheader("Redes Sociales")
-            redes_sociales = {}
-            redes_sociales["twitter"] = st.text_input("Twitter", "")
-            redes_sociales["instagram"] = st.text_input("Instagram", "")
-            redes_sociales["facebook"] = st.text_input("Facebook", "")
-            redes_sociales["linkedin"] = st.text_input("LinkedIn", "")
-            
-            # Solo agregar redes sociales si al menos una tiene valor
-            if any(redes_sociales.values()):
-                form_data["redes_sociales"] = redes_sociales
-        
-        # Generic JSON input for other entities or complex data
-        json_input = st.text_area("JSON (para datos complejos o entidades no especificadas)", 
-                                value=json.dumps(form_data, indent=2))
-        
-        try:
-            form_data = json.loads(json_input)
-        except json.JSONDecodeError:
-            st.error("JSON inválido. Por favor, verifica el formato.")
+        elif operation == "Crear" or operation == "Actualizar":
+            # Initialize form data
             form_data = {}
             
-        if operation == "Crear":
-            if st.button("Crear") and form_data:
-                with st.spinner("Creando..."):
-                    result = make_request("POST", entity_endpoints[entity], form_data)
-                    st.json(result)
-        else:  # Actualizar
-            entity_id = st.text_input(f"ID de {entity} a actualizar")
-            if st.button("Actualizar") and entity_id and form_data:
-                with st.spinner("Actualizando..."):
-                    result = make_request("PUT", f"{entity_endpoints[entity]}/{entity_id}", form_data)
-                    st.json(result)
+            # Entity-specific form fields
+            if entity == "Historias":
+                form_data["titulo"] = st.text_input("Título")
+                form_data["descripcion"] = st.text_area("Descripción")
+                form_data["generos"] = st.text_input("Géneros (separados por comas)").split(",") if st.text_input("Géneros (separados por comas)") else []
+                form_data["dificultad"] = st.slider("Dificultad", 1, 10, 5)
+                form_data["estado"] = st.selectbox("Estado", ["borrador", "publicado", "archivado"])
+                form_data["autor_id"] = st.text_input("ID del Autor")
+                form_data["publicada"] = st.checkbox("Publicada")
+            
+            elif entity == "Partidas":
+                form_data["historia_id"] = st.text_input("ID de Historia")
+                form_data["nombre"] = st.text_input("Nombre")
+                form_data["estado"] = st.selectbox("Estado", ["activa", "completada", "abandonada"])
+                form_data["fecha_inicio"] = st.date_input("Fecha de Inicio").isoformat()
+            
+            elif entity == "Jugadores":
+                form_data["nickname"] = st.text_input("Nickname")
+                form_data["email"] = st.text_input("Email")
+                form_data["nombre"] = st.text_input("Nombre")
+            
+            elif entity == "Personajes":
+                form_data["nombre"] = st.text_input("Nombre")
+                form_data["descripcion"] = st.text_area("Descripción")
+                form_data["historia_id"] = st.text_input("ID de la Historia")
+                form_data["atributos"] = st.text_area("Atributos (JSON)", "{}")
+                form_data["imagen"] = st.text_input("URL de Imagen")
+            
+            elif entity == "Nodos":
+                form_data["historia_id"] = st.text_input("ID de la Historia")
+                form_data["titulo"] = st.text_input("Título")
+                form_data["contenido"] = st.text_area("Contenido")
+                form_data["es_final"] = st.checkbox("Es Final")
+                form_data["orden"] = st.number_input("Orden", min_value=1)
+                form_data["imagen"] = st.text_input("URL de Imagen")
+                form_data["audio"] = st.text_input("URL de Audio")
+                form_data["video"] = st.text_input("URL de Video")
+            
+            elif entity == "Opciones":
+                form_data["nodo_origen_id"] = st.text_input("ID del Nodo Origen")
+                form_data["nodo_destino_id"] = st.text_input("ID del Nodo Destino")
+                form_data["texto"] = st.text_input("Texto")
+                form_data["condicion"] = st.text_area("Condición (opcional)")
+                form_data["orden"] = st.number_input("Orden", min_value=1)
+                form_data["efectos"] = st.text_area("Efectos (JSON)", "{}")
+            
+            elif entity == "Tablas Decisiones":
+                form_data["historia_id"] = st.text_input("ID de la Historia")
+                form_data["nombre"] = st.text_input("Nombre")
+                form_data["descripcion"] = st.text_area("Descripción")
+                form_data["reglas"] = st.text_area("Reglas (JSON)", "[]")
+            
+            elif entity == "Variables":
+                form_data["historia_id"] = st.text_input("ID de la Historia")
+                form_data["nombre"] = st.text_input("Nombre")
+                form_data["tipo"] = st.selectbox("Tipo", ["texto", "numero", "booleano"])
+                form_data["valor_defecto"] = st.text_input("Valor por Defecto")
+                form_data["descripcion"] = st.text_area("Descripción")
+            
+            elif entity == "Partidas-Jugadores":
+                form_data["partida_id"] = st.text_input("ID de la Partida")
+                form_data["jugador_id"] = st.text_input("ID del Jugador")
+                form_data["personaje_id"] = st.text_input("ID del Personaje")
+                form_data["estado"] = st.selectbox("Estado", ["activo", "inactivo", "eliminado"])
+                form_data["variables"] = st.text_area("Variables (JSON)", "{}")
+            
+            elif entity == "Historial Decisiones":
+                form_data["partida_id"] = st.text_input("ID de la Partida")
+                form_data["jugador_id"] = st.text_input("ID del Jugador")
+                form_data["nodo_id"] = st.text_input("ID del Nodo")
+                form_data["opcion_id"] = st.text_input("ID de la Opción")
+                form_data["timestamp"] = st.text_input("Timestamp (YYYY-MM-DD HH:MM:SS)")
+                form_data["variables_antes"] = st.text_area("Variables Antes (JSON)", "{}")
+                form_data["variables_despues"] = st.text_area("Variables Después (JSON)", "{}")
+            
+            elif entity == "Autores":
+                form_data["nombre"] = st.text_input("Nombre")
+                form_data["apellidos"] = st.text_input("Apellidos")
+                form_data["nombre_artistico"] = st.text_input("Nombre Artístico", "")
+                form_data["biografia"] = st.text_area("Biografía", "")
+                form_data["nacionalidad"] = st.text_input("Nacionalidad", "")
+                form_data["email"] = st.text_input("Email", "")
+                form_data["website"] = st.text_input("Sitio Web", "")
+                form_data["imagen_perfil"] = st.text_input("URL de Imagen de Perfil", "")
+                form_data["estado"] = st.selectbox("Estado", ["activo", "inactivo", "eliminado"])
+                
+                # Redes sociales como campos separados
+                st.subheader("Redes Sociales")
+                redes_sociales = {}
+                redes_sociales["twitter"] = st.text_input("Twitter", "")
+                redes_sociales["instagram"] = st.text_input("Instagram", "")
+                redes_sociales["facebook"] = st.text_input("Facebook", "")
+                redes_sociales["linkedin"] = st.text_input("LinkedIn", "")
+                
+                # Solo agregar redes sociales si al menos una tiene valor
+                if any(redes_sociales.values()):
+                    form_data["redes_sociales"] = redes_sociales
+            
+            # Generic JSON input for other entities or complex data
+            json_input = st.text_area("JSON (para datos complejos o entidades no especificadas)", 
+                                    value=json.dumps(form_data, indent=2))
+            
+            try:
+                form_data = json.loads(json_input)
+            except json.JSONDecodeError:
+                st.error("JSON inválido. Por favor, verifica el formato.")
+                form_data = {}
+                
+            if operation == "Crear":
+                if st.button("Crear") and form_data:
+                    with st.spinner("Creando..."):
+                        result = make_request("POST", entity_endpoints[entity], form_data)
+                        st.json(result)
+            else:  # Actualizar
+                entity_id = st.text_input(f"ID de {entity} a actualizar")
+                if st.button("Actualizar") and entity_id and form_data:
+                    with st.spinner("Actualizando..."):
+                        result = make_request("PUT", f"{entity_endpoints[entity]}/{entity_id}", form_data)
+                        st.json(result)
+                        
+        elif operation == "Eliminar":
+            entity_id = st.text_input(f"ID de {entity} a eliminar")
+            if st.button("Eliminar") and entity_id:
+                # Confirmation
+                if st.checkbox("Confirmar eliminación"):
+                    with st.spinner("Eliminando..."):
+                        result = make_request("DELETE", f"{entity_endpoints[entity]}/{entity_id}")
+                        st.json(result)
+                else:
+                    st.warning("Por favor, confirma la eliminación marcando la casilla.")
                     
-    elif operation == "Eliminar":
-        entity_id = st.text_input(f"ID de {entity} a eliminar")
-        if st.button("Eliminar") and entity_id:
-            # Confirmation
-            if st.checkbox("Confirmar eliminación"):
-                with st.spinner("Eliminando..."):
-                    result = make_request("DELETE", f"{entity_endpoints[entity]}/{entity_id}")
-                    st.json(result)
-            else:
-                st.warning("Por favor, confirma la eliminación marcando la casilla.")
-
-    # Special endpoints section
-    if special_endpoint != "Ninguno":
+    # Only show special endpoints section if a special endpoint is selected
+    else:
         st.subheader(f"Endpoint Especial: {special_endpoint}")
         
         if special_endpoint == "Variables por Historia":

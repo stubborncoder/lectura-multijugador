@@ -510,7 +510,8 @@ else:
             if entity == "Historias":
                 form_data["titulo"] = st.text_input("Título")
                 form_data["descripcion"] = st.text_area("Descripción")
-                form_data["generos"] = st.text_input("Géneros (separados por comas)").split(",") if st.text_input("Géneros (separados por comas)") else []
+                generos_input = st.text_input("Géneros (separados por comas)")
+                form_data["generos"] = [g.strip() for g in generos_input.split(",")] if generos_input else []
                 form_data["dificultad"] = st.slider("Dificultad", 1, 10, 5)
                 form_data["estado"] = st.selectbox("Estado", ["borrador", "publicado", "archivado"])
                 form_data["autor_id"] = st.text_input("ID del Autor")

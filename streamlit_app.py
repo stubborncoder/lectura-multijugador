@@ -514,7 +514,21 @@ else:
                 form_data["generos"] = [g.strip() for g in generos_input.split(",")] if generos_input else []
                 form_data["dificultad"] = st.slider("Dificultad", 1, 10, 5)
                 form_data["estado"] = st.selectbox("Estado", ["borrador", "publicado", "archivado"])
-                form_data["autor_id"] = st.text_input("ID del Autor")
+                
+                # Get list of autores for dropdown
+                autores_list = get_entity_list("Autores")
+                if autores_list:
+                    autor_name, autor_id = st.selectbox(
+                        "Seleccionar Autor", 
+                        options=autores_list, 
+                        format_func=lambda x: x[0],
+                        key="create_historia_autor_select"
+                    )
+                    st.caption(f"ID: {autor_id}")
+                    form_data["autor_id"] = autor_id
+                else:
+                    form_data["autor_id"] = st.text_input("ID del Autor (no se encontraron autores para seleccionar)")
+                
                 form_data["publicada"] = st.checkbox("Publicada")
             
             elif entity == "Partidas":
@@ -906,7 +920,29 @@ else:
                                 autor_id_str = str(autor_id)
                             else:
                                 autor_id_str = ""
-                            form_data["autor_id"] = st.text_input("ID del Autor", value=autor_id_str, key="update_historia_autor_id")
+                            # Get list of autores for dropdown
+                            autores_list = get_entity_list("Autores")
+                            if autores_list:
+                                # Find the current author in the list if possible
+                                current_autor_index = 0
+                                for i, (autor_name, autor_id_value) in enumerate(autores_list):
+                                    if str(autor_id_value) == autor_id_str:
+                                        current_autor_index = i
+                                        break
+                                
+                                autor_name, selected_autor_id = st.selectbox(
+                                    "Seleccionar Autor", 
+                                    options=autores_list, 
+                                    format_func=lambda x: x[0],
+                                    index=current_autor_index,
+                                    key="update_historia_autor_select"
+                                )
+                                st.caption(f"ID: {selected_autor_id}")
+                                form_data["autor_id"] = selected_autor_id
+                            else:
+                                form_data["autor_id"] = st.text_input("ID del Autor (no se encontraron autores para seleccionar)", 
+                                                                     value=autor_id_str, 
+                                                                     key="update_historia_autor_id")
                             
                             # Manejar publicada de forma segura
                             publicada = historia_actual.get("publicada")

@@ -39,19 +39,28 @@ CREATE TABLE jugadores (
     games_played JSONB DEFAULT '[]' -- Array de game_id jugados (estructura no relacional)
 );
 
--- Tabla PERSONAJE (simplificada, eliminando la redundancia de partida_id y game_id)
+-- Tabla PERSONAJE (actualizada para coincidir con el modelo Pydantic)
 CREATE TABLE personajes (
-    character_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    partida_id UUID NOT NULL REFERENCES partidas(game_id) ON DELETE CASCADE,
+    personaje_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Mantenemos UUID como en el modelo anterior (character_id)
     nombre VARCHAR(255) NOT NULL,
     descripcion TEXT,
-    estado JSONB DEFAULT '{}' -- Estado actual del personaje (valores de variables)
+    historia_id UUID NOT NULL REFERENCES historias(story_id) ON DELETE CASCADE, -- Nuevo campo como clave externa
+    partida_id UUID REFERENCES partidas(game_id) ON DELETE CASCADE, -- Ya no es NOT NULL porque ahora un personaje puede existir sin estar en una partida
+    rol VARCHAR(100),
+    habilidades TEXT[], -- Lista de habilidades como array de texto
+    nivel_poder SMALLINT CHECK (nivel_poder BETWEEN 1 AND 10),
+    imagen_perfil VARCHAR(255),
+    edad INTEGER,
+    origen VARCHAR(255),
+    fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    fecha_modificacion TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    estado VARCHAR(50) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo', 'eliminado'))
 );
 
 -- Tabla NODO
 CREATE TABLE nodos (
     node_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    personaje_id UUID NOT NULL REFERENCES personajes(character_id) ON DELETE CASCADE,
+    personaje_id UUID NOT NULL REFERENCES personajes(personaje_id) ON DELETE CASCADE,
     partida_id UUID NOT NULL REFERENCES partidas(game_id) ON DELETE CASCADE,
     titulo VARCHAR(255) NOT NULL,
     contenido TEXT NOT NULL,
@@ -86,7 +95,7 @@ CREATE TABLE tablas_decisiones (
 -- Tabla VARIABLE
 CREATE TABLE variables (
     variable_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    personaje_id UUID NOT NULL REFERENCES personajes(character_id) ON DELETE CASCADE,
+    personaje_id UUID NOT NULL REFERENCES personajes(personaje_id) ON DELETE CASCADE,
     nombre VARCHAR(255) NOT NULL,
     descripcion TEXT,
     tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('numero', 'texto', 'booleano', 'objeto')),
@@ -98,7 +107,7 @@ CREATE TABLE variables (
 CREATE TABLE partidas_jugadores (
     partida_id UUID REFERENCES partidas(game_id) ON DELETE CASCADE,
     jugador_id UUID REFERENCES jugadores(player_id) ON DELETE CASCADE,
-    personaje_id UUID REFERENCES personajes(character_id) ON DELETE SET NULL,
+    personaje_id UUID REFERENCES personajes(personaje_id) ON DELETE SET NULL,
     fecha_union TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (partida_id, jugador_id)
 );
@@ -108,7 +117,7 @@ CREATE TABLE historial_decisiones (
     decision_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     partida_id UUID NOT NULL REFERENCES partidas(game_id) ON DELETE CASCADE,
     jugador_id UUID NOT NULL REFERENCES jugadores(player_id) ON DELETE CASCADE,
-    personaje_id UUID NOT NULL REFERENCES personajes(character_id) ON DELETE CASCADE,
+    personaje_id UUID NOT NULL REFERENCES personajes(personaje_id) ON DELETE CASCADE,
     nodo_id UUID NOT NULL REFERENCES nodos(node_id) ON DELETE CASCADE,
     opcion_id UUID NOT NULL REFERENCES opciones(option_id) ON DELETE CASCADE,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

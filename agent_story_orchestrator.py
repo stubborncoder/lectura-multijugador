@@ -6,6 +6,9 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timezone
 from agents import Agent, Runner, function_tool, RunContextWrapper, trace
 from pydantic import BaseModel, Field
+from models.models import Historia, Personaje, ContenedorHistoria
+from agent_tools.agente_creador_historia import agente_creador_historia
+from agent_tools.agente_creador_personajes import agente_creador_de_personajes
 
 
 # Try to import dotenv, but don't fail if it's not available
@@ -17,134 +20,12 @@ except ImportError:
     print("python-dotenv not available, skipping .env loading")
 
 
-
 # Check if OPENAI_API_KEY is in environment variables
 if "OPENAI_API_KEY" not in os.environ:
     print("OPENAI_API_KEY not found in environment variables. Please set it in your .env file.")
 else:
     print("OPENAI_API_KEY found in environment variables")
 
-
-class Historia(BaseModel):
-    """
-    Modelo Pydantic para representar una historia interactiva.
-    """
-    story_id: str = Field(..., description="Identificador único de la historia")
-    titulo: str = Field(..., description="T¡tulo principal de la historia que se mostrará a los usuarios")
-    descripcion: Optional[str] = Field(None, description="Resumen o sinopsis del contenido de la historia")
-    generos: Optional[List[str]] = Field(None, description="Categor¡as o g®neros literarios a los que pertenece la historia")
-    dificultad: Optional[int] = Field(None, description="Nivel de complejidad de la historia (1-5, donde 5 es muy dif¡cil)")
-    imagen_portada: Optional[str] = Field(None, description="URL o ruta a la imagen de portada que representa visualmente la historia")
-    min_jugadores: int = Field(..., description="Cantidad m¡nima de jugadores necesarios para iniciar una partida")
-    max_jugadores: int = Field(..., description="Capacidad máxima de jugadores que pueden participar simultáneamente")
-    autor_id: str = Field(..., description="Identificador del usuario que creó la historia")
-    fecha_creacion: str = Field(..., description="Fecha y hora en que se creó la historia en la base de datos")
-    fecha_modificacion: str = Field(..., description="Fecha y hora de la última actualización de cualquier campo")
-    estado: Optional[str] = Field(..., description="Estado actual de la historia (borrador, publicada, archivada, etc.)")
-
-
-class Personaje(BaseModel):
-    """
-    Modelo Pydantic para representar un personaje en una historia interactiva.
-    """
-    personaje_id: str = Field(..., description="Identificador único del personaje")
-    nombre: str = Field(..., description="Nombre del personaje que se mostrará a los usuarios")
-    descripcion: Optional[str] = Field(None, description="Descripción f¡sica y de personalidad del personaje")
-    story_id: str = Field(..., description="Identificador de la historia a la que pertenece el personaje")
-    rol: Optional[str] = Field(None, description="Rol del personaje en la historia (protagonista, antagonista, secundario, etc.)")
-    habilidades: Optional[List[str]] = Field(None, description="Lista de habilidades especiales que posee el personaje")
-    nivel_poder: Optional[int] = Field(None, description="Nivel de poder del personaje (1-10, donde 10 es muy poderoso)")
-    imagen_perfil: Optional[str] = Field(None, description="URL o ruta a la imagen que representa visualmente al personaje")
-    edad: Optional[int] = Field(None, description="Edad del personaje en años")
-    origen: Optional[str] = Field(None, description="Lugar de origen o procedencia del personaje")
-    creador_id: str = Field(..., description="Identificador del usuario que creó el personaje")
-    fecha_creacion: str = Field(..., description="Fecha y hora en que se creó el personaje en la base de datos")
-    fecha_modificacion: str = Field(..., description="Fecha y hora de la última actualización de cualquier campo")
-    estado: Optional[str] = Field(..., description="Estado actual del personaje (activo, inactivo, eliminado, etc.)")
-
-
-class ContenedorHistoria(BaseModel):
-    """
-    Modelo Pydantic que contiene una Historia como único campo.
-    Puede ser utilizado para encapsular una Historia en estructuras de datos más complejas.
-    """
-    historia: Historia = Field(..., description="Historia interactiva contenida en este modelo")
-    personajes: List[Personaje] = Field(default_factory=list, description="Lista de personajes asociados a esta historia")
-    
-
-# Define a simple function to create a Historia from user input
-@function_tool("create_historia")
-def create_historia(titulo: str, descripcion: str, min_jugadores: int, max_jugadores: int, generos: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Create a Historia object from the provided parameters.
-    
-    Args:
-        titulo: The title of the story
-        descripcion: The description of the story
-        min_jugadores: Minimum number of players
-        max_jugadores: Maximum number of players
-        generos: Optional list of genres
-        
-    Returns:
-        A dictionary representation of the Historia
-    """
-    # Create a Historia object
-    historia = Historia(
-        story_id=str(uuid.uuid4()),
-        titulo=titulo,
-        descripcion=descripcion,
-        min_jugadores=min_jugadores,
-        max_jugadores=max_jugadores,
-        generos=generos,
-        autor_id=str(uuid.uuid4())  # Generate a random author ID for testing
-    )
-    
-    # Return the Historia as a dictionary
-    return historia.model_dump()
-
-# Define a function to create a Personaje from user input
-@function_tool("create_personaje")
-def create_personaje(nombre: str, historia_id: str, descripcion: Optional[str] = None, rol: Optional[str] = None, 
-                    habilidades: Optional[List[str]] = None, nivel_poder: Optional[int] = None, 
-                    imagen_perfil: Optional[str] = None, edad: Optional[int] = None, 
-                    origen: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Create a Personaje object from the provided parameters.
-    
-    Args:
-        nombre: Name of the character
-        historia_id: ID of the story the character belongs to (MUST be a valid story_id from a previously created Historia)
-        descripcion: Description of the character's physical appearance and personality
-        rol: Role of the character in the story (protagonist, antagonist, etc.)
-        habilidades: List of special abilities the character possesses
-        nivel_poder: Power level of the character (1-10, where 10 is very powerful)
-        imagen_perfil: URL or path to the image representing the character
-        edad: Age of the character in years
-        origen: Place of origin or background of the character
-        
-    Returns:
-        A dictionary representation of the Personaje
-    """
-    # Create a Personaje object
-    personaje = Personaje(
-        personaje_id=str(uuid.uuid4()),
-        nombre=nombre,
-        descripcion=descripcion,
-        story_id=historia_id,
-        rol=rol,
-        habilidades=habilidades,
-        nivel_poder=nivel_poder,
-        imagen_perfil=imagen_perfil,
-        edad=edad,
-        origen=origen,
-        creador_id=str(uuid.uuid4()),  # Generate a random creator ID for testing
-        fecha_creacion=datetime.now(timezone.utc).isoformat(),
-        fecha_modificacion=datetime.now(timezone.utc).isoformat(),
-        estado="activo"  # Default state
-    )
-    
-    # Return the Personaje as a dictionary
-    return personaje.model_dump()
 
 # Function to create a ContenedorHistoria from a Historia
 @function_tool
@@ -164,12 +45,12 @@ def create_contenedor_historia(
     Crea un ContenedorHistoria con una Historia y opcionalmente personajes.
     
     Args:
-        titulo: T¡tulo de la historia
+        titulo: Título de la historia
         descripcion: Descripción de la historia
-        generos: Lista de g®neros de la historia
+        generos: Lista de géneros de la historia
         dificultad: Nivel de dificultad de la historia (1-5)
         imagen_portada: URL o ruta a la imagen de portada
-        min_jugadores: Número m¡nimo de jugadores
+        min_jugadores: Número mínimo de jugadores
         max_jugadores: Número máximo de jugadores
         estado: Estado de la historia (borrador, publicada, etc.)
         personajes: Lista de diccionarios con datos de personajes
@@ -178,7 +59,7 @@ def create_contenedor_historia(
         ContenedorHistoria object
     """
     # Usar valores predeterminados si no se proporcionan
-    titulo = titulo or "Historia sin t¡tulo"
+    titulo = titulo or "Historia sin título"
     min_jugadores = min_jugadores or 1
     max_jugadores = max_jugadores or 4
     
@@ -225,78 +106,28 @@ def create_contenedor_historia(
     # Devolver el contenedor directamente
     return contenedor
 
-# Define the agente_creador_historia agent
-agente_creador_historia = Agent(
-    name="Creador de Historia",
-    handoff_description="Agente especialista en la el tratamiento de la tabla o entidad **HISTORIA** para lectura multijugardor",
-    instructions="""Se encarga de interpretar la información que recibe y crear una estructura JSON con los datos de la historia.
-                
-    Tu tarea es extraer los datos necesarios para crear una Historia y devolverlos en formato JSON.
-    
-    Debes asegurarte de que los siguientes campos obligatorios est®n presentes:
-    - titulo: T¡tulo de la historia
-    - min_jugadores: Número m¡nimo de jugadores (debe ser al menos 1)
-    - max_jugadores: Número máximo de jugadores (debe ser al menos igual a min_jugadores)
-    - autor_id: Se generará automáticamente, no te preocupes por este campo
-    
-    Tambi®n puedes incluir estos campos opcionales si están disponibles:
-    - descripcion: Descripción o sinopsis de la historia
-    - generos: Lista de g®neros literarios
-    - dificultad: Nivel de complejidad (1-5)
-    - imagen_portada: URL de la imagen de portada
-    - estado: Estado de la historia (por defecto es "borrador")
-    """,
-    tools=[create_historia]
-)
-
-# Define the agente_creador_de_personajes agent
-agente_creador_de_personajes = Agent(
-    name="Creador de Personajes",
-    handoff_description="Agente especialista en la el tratamiento de la tabla o entidad **PERSONAJE** para lectura multijugardor",
-    instructions="""Se encarga de interpretar la información que recibe y crear los personajes para una historia.
-                
-    Tu tarea es extraer los datos necesarios para crear los personajes y devolverlos en formato JSON.
-    
-    IMPORTANTE: Debes utilizar el story_id proporcionado por la historia previamente creada.
-    
-    Debes asegurarte de que los siguientes campos obligatorios est®n presentes:
-    - nombre: Nombre del personaje
-    - story_id: ID de la historia a la que pertenece el personaje (DEBE ser el ID de una historia existente)
-    
-    Tambi®n puedes incluir estos campos opcionales si están disponibles:
-    - descripcion: Descripción f¡sica y de personalidad del personaje
-    - rol: Rol del personaje en la historia (protagonista, antagonista, etc.)
-    - habilidades: Lista de habilidades especiales que posee el personaje
-    - nivel_poder: Nivel de poder del personaje (1-10)
-    - imagen_perfil: URL o ruta a la imagen que representa al personaje
-    - edad: Edad del personaje en años
-    - origen: Lugar de origen o procedencia del personaje
-    """,
-    tools=[create_personaje]
-)
-
 orchestrator_agent = Agent(
     name="orchestrator_agent",
     instructions=(
         """Eres un agente que utiliza sus herramientas para crear historias interactivas.
         
-        IMPORTANTE: Tu ÜNICA tarea es extraer información del mensaje del usuario, llamar a las herramientas que tienes y
+        IMPORTANTE: Tu ÚNICA tarea es extraer información del mensaje del usuario, llamar a las herramientas que tienes y
         devolver el objeto JSON con la estructura correcta.
         
         Sigue estos pasos en ORDEN ESTRICTO:
         
         1. Extrae del mensaje del usuario los datos para crear una historia:
-           - t¡tulo
+           - título
            - descripción
            - min_jugadores
            - max_jugadores
-           - g®neros
+           - géneros
            - dificultad
            - estado
         
         2. PRIMERO llama a la herramienta creador_historia para crear la historia y obtener su ID.
         
-        3. DESPUëS extrae del mensaje del usuario los datos para crear los personajes.
+        3. DESPUÉS extrae del mensaje del usuario los datos para crear los personajes.
            - DEBES crear al menos 2 personajes para cada historia.
            - Si el usuario no especifica personajes, crea personajes que sean apropiados para la historia.
            - Asegúrate de que cada personaje tenga al menos un nombre y una descripción.
@@ -308,11 +139,11 @@ orchestrator_agent = Agent(
            tanto la historia como los personajes.
         
         6. Si falta información, usa estos valores predeterminados:
-           - t¡tulo = "Historia sin t¡tulo"
+           - título = "Historia sin título"
            - min_jugadores = 1
            - max_jugadores = 4
            - descripción = null
-           - g®neros = null
+           - géneros = null
            - dificultad = null
            - estado = null
                       
@@ -342,7 +173,7 @@ async def main():
         # Initial prompt
         msg = input("""
 Por favor, proporciona información para tu historia interactiva.
-Por ejemplo: 'El t¡tulo de la historia será 'El asombroso pedo errante', la descripción ser¡a 'Una aventura mágica en un bosque lleno de criaturas fantásticas y misterios por resolver.' El m¡nimo de jugadores es 2 y el máximo 3. Incluye personajes como un guerrero, un mago y un p¡caro.'
+Por ejemplo: 'El título de la historia será 'El asombroso pedo errante', la descripción sería 'Una aventura mágica en un bosque lleno de criaturas fantásticas y misterios por resolver.' El mínimo de jugadores es 2 y el máximo 3. Incluye personajes como un guerrero, un mago y un pícaro.'
 
 Tu entrada: """)
 

@@ -32,6 +32,16 @@ def get_supabase_client():
         st.error("Error connecting to Supabase. Please check your credentials.")
         return None
 
+# Function to get OpenAI API key from Streamlit secrets
+def get_openai_api_key():
+    try:
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+        return os.environ["OPENAI_API_KEY"]
+    except Exception as e:
+        logger.error(f"Error loading OpenAI API key: {e}")
+        st.error("Error loading OpenAI API key. Please check your secrets.")
+        return None
+
 API_BASE_URL = get_api_url()
 
 # Initialize session state for auth

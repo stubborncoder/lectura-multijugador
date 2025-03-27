@@ -35,11 +35,21 @@ def get_supabase_client():
 # Function to get OpenAI API key from Streamlit secrets
 def get_openai_api_key():
     try:
-        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-        return os.environ["OPENAI_API_KEY"]
+        # Try to get from openai section first
+        if "openai" in st.secrets and "OPENAI_API_KEY" in st.secrets["openai"]:
+            os.environ["OPENAI_API_KEY"] = st.secrets["openai"]["OPENAI_API_KEY"]
+            return os.environ["OPENAI_API_KEY"]
+        # Fallback to top-level key
+        elif "OPENAI_API_KEY" in st.secrets:
+            os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+            return os.environ["OPENAI_API_KEY"]
+        else:
+            logger.error("OpenAI API key not found in secrets")
+            st.error("OpenAI API key not found. Please check your secrets configuration.")
+            return None
     except Exception as e:
         logger.error(f"Error loading OpenAI API key: {e}")
-        st.error("Error loading OpenAI API key. Please check your secrets.")
+        st.error(f"Error loading OpenAI API key: {e}")
         return None
 
 API_BASE_URL = get_api_url()
@@ -552,40 +562,45 @@ else:
                     import json
                     from agent_story_orchestrator import orchestrator_agent, Runner, trace
                     
-                    # Function to run the agent asynchronously
-                    def run_agent_async(message):
-                        async def _run():
-                            try:
-                                # Use Runner.run with the user's message
-                                result = await Runner.run(orchestrator_agent, message)
-                                return result
-                            except Exception as e:
-                                st.error(f"Error durante la ejecución: {str(e)}")
-                                return None
-                        
-                        # Create and run the event loop
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        try:
-                            return loop.run_until_complete(_run())
-                        finally:
-                            loop.close()
-                    
-                    # Run the agent with a modified prompt that explicitly asks for personajes
-                    enhanced_prompt = f"{user_input}\n\nPor favor, asegúrate de crear al menos 2 personajes para esta historia con nombres, descripciones y roles."
-                    st.info(f"Prompt mejorado: {enhanced_prompt}")
-                    
-                    # Run the agent
-                    result = run_agent_async(enhanced_prompt)
-                    
-                    # Store the result
-                    st.session_state.agent_result = result
-                    
-                    # Display success message
-                    if result:
-                        st.success("¡Historia generada con éxito!")
+                    # Make sure OpenAI API key is set before running the agent
+                    openai_api_key = get_openai_api_key()
+                    if not openai_api_key:
+                        st.error("No se pudo obtener la clave de API de OpenAI. Por favor, verifica tu configuración.")
                     else:
-                        st.error("Hubo un problema al generar la historia. Por favor, intenta de nuevo.")
+                        # Function to run the agent asynchronously
+                        def run_agent_async(message):
+                            async def _run():
+                                try:
+                                    # Use Runner.run with the user's message
+                                    result = await Runner.run(orchestrator_agent, message)
+                                    return result
+                                except Exception as e:
+                                    st.error(f"Error durante la ejecución: {str(e)}")
+                                    return None
+                            
+                            # Create and run the event loop
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            try:
+                                return loop.run_until_complete(_run())
+                            finally:
+                                loop.close()
+                        
+                        # Run the agent with a modified prompt that explicitly asks for personajes
+                        enhanced_prompt = f"{user_input}\n\nPor favor, asegúrate de crear al menos 2 personajes para esta historia con nombres, descripciones y roles."
+                        st.info(f"Prompt mejorado: {enhanced_prompt}")
+                        
+                        # Run the agent
+                        result = run_agent_async(enhanced_prompt)
+                        
+                        # Store the result
+                        st.session_state.agent_result = result
+                        
+                        # Display success message
+                        if result:
+                            st.success("¡Historia generada con éxito!")
+                        else:
+                            st.error("Hubo un problema al generar la historia. Por favor, intenta de nuevo.")
                 
                 except Exception as e:
                     st.error(f"Error al ejecutar el agente: {str(e)}")
